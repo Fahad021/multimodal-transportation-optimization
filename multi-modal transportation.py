@@ -296,19 +296,29 @@ class MMT:
         nonzeroX = sorted(nonzeroX, key=lambda x: x[2])
         nonzeroX = sorted(nonzeroX, key=lambda x: x[3])
         nonzeroX = list(map(lambda x: (self.portIndex[x[0]], self.portIndex[x[1]], \
-                                       (self.minDate + pd.to_timedelta(x[2], unit='days')).date().isoformat(),
+                                           (self.minDate + pd.to_timedelta(x[2], unit='days')).date().isoformat(),
                                        x[3]), nonzeroX))
 
         self.whCostFinal, arrTime, _ = self.warehouse_fee(self.xs)
         self.transportCost = np.sum(self.ys * self.tranCost) + np.sum(self.zs * self.tranFixedCost)
         self.taxCost = np.sum(self.taxPct * self.kValue) + \
-                       np.sum(np.sum(np.dot(self.xs, self.kValue), axis=2) * self.transitDuty)
+                           np.sum(np.sum(np.dot(self.xs, self.kValue), axis=2) * self.transitDuty)
         self.solution_ = {}
         self.arrTime_ = {}
         for i in range(self.goods):
-            self.solution_['goods-' + str(i + 1)] = list(filter(lambda x: x[3] == i, nonzeroX))
-            self.arrTime_['goods-' + str(i + 1)] = (self.minDate + pd.to_timedelta \
-                (np.sum(arrTime[:, self.kEndPort[i], :, i]), unit='days')).date().isoformat()
+            self.solution_[f'goods-{str(i + 1)}'] = list(
+                filter(lambda x: x[3] == i, nonzeroX)
+            )
+            self.arrTime_[f'goods-{str(i + 1)}'] = (
+                (
+                    self.minDate
+                    + pd.to_timedelta(
+                        np.sum(arrTime[:, self.kEndPort[i], :, i]), unit='days'
+                    )
+                )
+                .date()
+                .isoformat()
+            )
 
     def get_output_(self):
         '''After the model is solved, return total cost, final solution and arrival
@@ -345,18 +355,16 @@ class MMT:
             txt += "\n------------------------------------"
             txt += "\nGoods-" + str(i + 1) + "  Category: " + order['Commodity'][i]
             txt += "\nStart date: " + pd.to_datetime(order['Order Date']) \
-                .iloc[i].date().isoformat()
-            txt += "\nArrival date: " + str(self.arrTime_['goods-' + str(i + 1)])
+                    .iloc[i].date().isoformat()
+            txt += "\nArrival date: " + str(self.arrTime_[f'goods-{str(i + 1)}'])
             txt += "\nRoute:"
-            solution = self.solution_['goods-' + str(i + 1)]
+            solution = self.solution_[f'goods-{str(i + 1)}']
             route_txt = ''
-            a = 1
-            for j in solution:
+            for a, j in enumerate(solution, start=1):
                 route_txt += "\n(" + str(a) + ")Date: " + j[2]
                 route_txt += "  From: " + j[0]
                 route_txt += "  To: " + j[1]
                 route_txt += "  By: " + travelMode[(j[0], j[1])]
-                a += 1
             txt += route_txt
 
         return txt
@@ -370,11 +378,27 @@ def transform(filePath):
     order['Tax Percentage'][order['Journey Type'] == 'Domestic'] = 0
     route['Cost'] = route[route.columns[7:12]].sum(axis=1)
     route['Time'] = np.ceil(route[route.columns[14:18]].sum(axis=1) / 24)
-    route = route[list(route.columns[0:4]) + ['Fixed Freight Cost', 'Time', \
-                                              'Cost', 'Warehouse Cost', 'Travel Mode', 'Transit Duty'] + list(
-        route.columns[-9:-2])]
-    route = pd.melt(route, id_vars=route.columns[0:10], value_vars=route.columns[-7:] \
-                    , var_name='Weekday', value_name='Feasibility')
+    route = route[
+        (
+            list(route.columns[:4])
+            + [
+                'Fixed Freight Cost',
+                'Time',
+                'Cost',
+                'Warehouse Cost',
+                'Travel Mode',
+                'Transit Duty',
+            ]
+        )
+        + list(route.columns[-9:-2])
+    ]
+    route = pd.melt(
+        route,
+        id_vars=route.columns[:10],
+        value_vars=route.columns[-7:],
+        var_name='Weekday',
+        value_name='Feasibility',
+    )
     route['Weekday'] = route['Weekday'].replace({'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, \
                                                  'Thursday': 4, 'Friday': 5, 'Saturday': 6, 'Sunday': 7})
 
